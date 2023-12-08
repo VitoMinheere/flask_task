@@ -34,7 +34,18 @@ class TaskDetailResource(Resource):
 
         return make_response(jsonify({'error': 'Task not found'}), 404)
 
+    def put(self, task_id):
+        task = next((t for t in tasks if t['id'] == task_id), None)
+        if task:
+            try:
+                data = TaskCreateUpdateModel(**request.json)
+            except ValidationError as e:
+                return make_response(jsonify({'error': e.errors()}), 400)
+            else:
+                task.update(data.model_dump())
+                return jsonify({'task': task})
 
+        return make_response(jsonify({'error': 'Task not found'}), 404)
 
 # Add resources to the API
 api.add_resource(TaskResource, '/tasks')
