@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "flask-task"
+version = "0.0.1"
+description = "Task REST API in Flask, deployable on Azure"
+authors = ["Vito Minheere <vitominheere@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+psycopg2 = "^2.9.7"
+flask = "^3.0.0"
+pydantic = "^2.5.2"
+flask-sqlalchemy = "^3.1.1"
+flask-migrate = "^4.0.5"
+ruff = "^0.1.7"
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.1.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
