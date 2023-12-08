@@ -8,7 +8,7 @@ app = Flask(__name__)
 api = Api(app)
 
 # DB for quick tests
-tasks = [{"title": "First Task", "description": "Test"}]
+tasks = [{"id": 1, "title": "First Task", "description": "Test"}]
 task_id_counter = 1
 
 # Task Resource
@@ -25,8 +25,20 @@ class TaskResource(Resource):
         except ValidationError as e:
             return make_response(jsonify({'error': e.errors()}), 400)
 
+class TaskDetailResource(Resource):
+    def get(self, task_id):
+        task = next((t for t in tasks if t['id'] == task_id), None)
+
+        if task:
+            return jsonify({'task': TaskResponseModel(**task).model_dump()})
+
+        return make_response(jsonify({'error': 'Task not found'}), 404)
+
+
+
 # Add resources to the API
 api.add_resource(TaskResource, '/tasks')
+api.add_resource(TaskDetailResource, '/tasks/<int:task_id>')
 
 if __name__ == '__main__':
     app.run(debug=True)
