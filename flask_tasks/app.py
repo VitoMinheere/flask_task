@@ -16,6 +16,15 @@ class TaskResource(Resource):
     def get(self):
         return jsonify({'tasks': [task for task in tasks]})
 
+    def post(self):
+        try:
+            data = TaskCreateUpdateModel(**request.json)
+            task = {'id': len(tasks)+1, **data.model_dump()}
+            tasks.append(task)
+            return jsonify({'task': task})
+        except ValidationError as e:
+            return make_response(jsonify({'error': e.errors()}), 400)
+
 # Add resources to the API
 api.add_resource(TaskResource, '/tasks')
 
