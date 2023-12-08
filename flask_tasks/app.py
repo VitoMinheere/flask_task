@@ -7,9 +7,9 @@ from flask_sqlalchemy import SQLAlchemy
 from flask import request, jsonify, make_response
 from flask_restful import Resource, reqparse
 
-# from .endpoints.tasks import TaskResource, TaskDetailResource
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy import text
+from sqlalchemy.sql import func
+from sqlalchemy.orm import Session
 
 app = Flask(__name__)
 api = Api(app)
@@ -29,27 +29,39 @@ app.config.update(
     SQLALCHEMY_TRACK_MODIFICATIONS=False,
 )
 
-# Initialize the database connection
 db = SQLAlchemy(app)
 
+# Create the Model
 class Task(db.Model):
-    id = db.Column(UUID(as_uuid=True), primary_key=True, default=text("uuid_generate_v4()"))
+    """"Model which represents a Task.
+
+    Can only be deleted upon completion
+    """
+
+    __table_name__ = "task"
+    id = db.Column(db.Integer(), primary_key=True, autoincrement=True)
     title = db.Column(db.String(80), nullable=False)
     description = db.Column(db.String(1000), nullable=False)
-    created_at = db.Column(db.DateTime())
+    # Let DB handle setting the correct timestamp
+    created_at = db.Column(db.DateTime(), server_default=func.now())
+
+    __table_args__ = {'schema': 'flask_task'}
+    
 
     def __repr__(self):
         return self.title
 
     def to_dict(self):
+        """Return relevant fields as a dictionary."""
         return {
             "title": self.title,
             "description": self.description
         }
 
+# Initialize the database connection
+with app.app_context():
+    db.create_all()
 
-# DB for quick tests
-tasks = [{"id": 1, "title": "First Task", "description": "Test"}]
 
 # Task Resource
 class TaskResource(Resource):
@@ -63,7 +75,7 @@ class TaskResource(Resource):
 
     def get(self):
         """Return all tasks found in database."""
-        return jsonify({"tasks": [task for task in tasks]})
+        return jsonify({"tasks": [task.to_dict() for task in Task.query.all()]})
 
     def post(self):
         try:
@@ -74,12 +86,13 @@ class TaskResource(Resource):
                 if v != None:
                     d[k] = v
 
-            data = Task(**d)
-            task = {"id": len(tasks) + 1, **data.to_dict()}
-            tasks.append(task)
-            return jsonify({"task": task})
+            task = Task(**d)
         except TypeError as e:
             return make_response(jsonify({"error": str(e)}), 400)
+        else:
+            db.session.add(task)
+            db.session.commit()
+            return jsonify({"task": task.to_dict()})
 
 
 class TaskDetailResource(Resource):
@@ -93,15 +106,16 @@ class TaskDetailResource(Resource):
     
 
     def get(self, task_id: int):
-        task = next((t for t in tasks if t["id"] == task_id), None)
+        task = Task.query.filter(id=task_id).first()
 
         if task:
-            return jsonify({"task": Task(**task).to_dict()})
+            return jsonify({"task": task.to_dict()})
 
         return make_response(jsonify({"error": "Task not found"}), 404)
 
     def put(self, task_id: int):
-        task = next((t for t in tasks if t["id"] == task_id), None)
+        task = Task.query.filter(id=task_id).first()
+
         if task:
             try:
                 # data = Task(**request.json) 
@@ -114,13 +128,14 @@ class TaskDetailResource(Resource):
                 return make_response(jsonify({"error": e.errors()}), 400)
             else:
                 task.update(data)
-                return jsonify({"task": task})
+                db.session.put(task)
+                return jsonify({"task": task.to_dict()})
 
         return make_response(jsonify({"error": "Task not found"}), 404)
 
     def delete(self, task_id: int):
-        global tasks
-        task = next((t for t in tasks if t["id"] == task_id), None)
+        task = Task.query.filter(id=task_id).first()
+
         if not task:
             return make_response(jsonify({"error": "Task not found"}), 404)
 
@@ -129,6 +144,7 @@ class TaskDetailResource(Resource):
 
 VERSION = "v1.0"
 BASE_URL = f"/flask_task/api/{VERSION}"
+
 # Add resources to the API
 api.add_resource(TaskResource, f"{BASE_URL}/tasks")
 api.add_resource(TaskDetailResource, f"{BASE_URL}/tasks/<int:task_id>")
