@@ -73,7 +73,11 @@ class TestTaskEndpoints(unittest.TestCase):
         self.assertIn('error', data)
 
     def test_delete_task(self):
-        task_id = 1  # Assuming there's at least one task in the list
+        task_data = {'title': 'Test Task', 'description': 'This is a test task'}
+        response = self.app.post('/tasks', json=task_data)
+        data = json.loads(response.get_data(as_text=True))
+        task_id = data["task"]["id"]
+
         response = self.app.delete(f'/tasks/{task_id}')
         data = json.loads(response.get_data(as_text=True))
         self.assertEqual(response.status_code, 200)

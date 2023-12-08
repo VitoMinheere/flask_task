@@ -47,6 +47,15 @@ class TaskDetailResource(Resource):
 
         return make_response(jsonify({'error': 'Task not found'}), 404)
 
+    def delete(self, task_id):
+        global tasks
+        task = next((t for t in tasks if t['id'] == task_id), None)
+        if not task:
+            return make_response(jsonify({'error': 'Task not found'}), 404)
+
+        tasks = [t for t in tasks if t['id'] != task_id]
+        return make_response(jsonify({'message': 'Task deleted successfully'}))
+
 # Add resources to the API
 api.add_resource(TaskResource, '/tasks')
 api.add_resource(TaskDetailResource, '/tasks/<int:task_id>')
