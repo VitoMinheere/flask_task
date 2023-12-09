@@ -6,12 +6,14 @@ from flask_sqlalchemy import SQLAlchemy
 
 from flask import request, jsonify, make_response
 from flask_restful import Resource, reqparse
+from flasgger import Swagger, swag_from
 
 from sqlalchemy import text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import Session
 
 app = Flask(__name__)
+swagger = Swagger(app)
 api = Api(app)
 
 # WEBSITE_HOSTNAME exists only in production environment
@@ -74,10 +76,51 @@ class TaskResource(Resource):
         super(TaskResource, self).__init__()
 
     def get(self):
-        """Return all tasks found in database."""
+        """Get all Tasks in the database.
+
+        ---
+        tags:
+          - tasks
+        definitions:
+          TaskList:
+            type: array
+            items:
+              $ref: '#/definitions/Task' 
+          Task:
+            type: object
+            properties:
+              id:
+                type: integer
+              description:
+                type: string
+        responses:
+          200:
+            description: A list of all tasks in the database
+            schema:
+                $ref: '#/definitions/TaskList' 
+
+        """
         return jsonify({"tasks": [task.to_dict() for task in Task.query.all()]})
 
     def post(self):
+        """Create a new Task in the database.
+
+        ---
+        tags:
+          - tasks
+        parameters:
+          - name: task_id
+            in: path
+            type: integer
+            required: true
+        responses:
+          201:
+            description: A new Task has been created
+            schema:
+                $ref: '#/definitions/Task' 
+        400:
+            description: Bad request, title and description must be filled
+        """
         try:
             d = {}
             args = self.reqparse.parse_args()
@@ -106,7 +149,25 @@ class TaskDetailResource(Resource):
     
 
     def get(self, task_id: int):
-        task = Task.query.filter(id=task_id).first()
+        """Get a single Task in the database.
+
+        ---
+        tags:
+          - tasks
+        parameters:
+          - name: task_id
+            in: path
+            type: integer
+            required: true
+        responses:
+          200:
+            description: A single Task
+            schema:
+                $ref: '#/definitions/Task' 
+          404:
+            description: Task with specified ID was not found
+        """
+        task = Task.query.get(task_id)
 
         if task:
             return jsonify({"task": task.to_dict()})
@@ -114,11 +175,28 @@ class TaskDetailResource(Resource):
         return make_response(jsonify({"error": "Task not found"}), 404)
 
     def put(self, task_id: int):
-        task = Task.query.filter(id=task_id).first()
+        """Update a single Task in the database.
+
+        ---
+        tags:
+          - tasks
+        parameters:
+          - name: task_id
+            in: path
+            type: integer
+            required: true
+        responses:
+          200:
+            description: A single Task
+            schema:
+                $ref: '#/definitions/Task' 
+          404:
+            description: Task with specified ID was not found
+        """
+        task = Task.query.get(task_id)
 
         if task:
             try:
-                # data = Task(**request.json) 
                 data = {}
                 args = self.reqparse.parse_args()
                 for k, v in args.items():
@@ -134,6 +212,22 @@ class TaskDetailResource(Resource):
         return make_response(jsonify({"error": "Task not found"}), 404)
 
     def delete(self, task_id: int):
+        """Update an existing Task in the database.
+
+        ---
+        tags:
+          - tasks
+        parameters:
+          - name: task_id
+            in: path
+            type: integer
+            required: true
+        responses:
+          204:
+            description: Task deleted
+          404:
+            description: Task with specified ID was not found
+        """
         task = Task.query.filter(id=task_id).first()
 
         if not task:
