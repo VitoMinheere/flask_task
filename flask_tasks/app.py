@@ -1,4 +1,5 @@
 import os
+from functools import wraps
 
 from flask import Flask
 from flask_restful import Api
@@ -7,13 +8,29 @@ from flask_sqlalchemy import SQLAlchemy
 from flask import request, jsonify, make_response
 from flask_restful import Resource, reqparse
 from flasgger import Swagger, swag_from
+from flask_httpauth import HTTPTokenAuth
 
-from sqlalchemy import text, inspect
 from sqlalchemy.sql import func
 from sqlalchemy.orm import Session
 
 app = Flask(__name__)
-swagger = Swagger(app)
+auth = HTTPTokenAuth(scheme='Bearer')
+swagger = Swagger(app,
+      template={
+        "swagger": "2.0",
+        "info": {
+            "title": "Flask Task API",
+            "version": "1.0",
+        },
+        "consumes": [
+            "application/json",
+        ],
+        "produces": [
+            "application/json",
+        ],
+        "headers": []
+    }
+)
 api = Api(app)
 
 # WEBSITE_HOSTNAME exists only in production environment
@@ -24,7 +41,7 @@ if app.testing:
 elif 'WEBSITE_HOSTNAME' not in os.environ:
     print("Loading config.development and environment variables from .env file.")
     # local
-    app.config.from_object('configs.development')
+    app.config.from_object('configs.testing')
 else:
     # production
     print("Loading config.production.")
@@ -42,17 +59,15 @@ class Task(db.Model):
 
     Can only be deleted upon completion
     """
-
     __table_name__ = app.config.get("TABLE_NAME")
     id = db.Column(db.Integer(), primary_key=True, autoincrement=True)
     title = db.Column(db.String(80), nullable=False)
     description = db.Column(db.String(255), nullable=False)
-    # Let DB handle setting the correct timestamp
+    # Let database handle setting the correct timestamp
     created_at = db.Column(db.DateTime(), server_default=func.now())
 
     __table_args__ = {'schema': app.config.get('SCHEMA_NAME')}
     
-
     def __repr__(self):
         return self.title
 
@@ -66,16 +81,27 @@ class Task(db.Model):
 
 # Initialize the database connection and create the DB and tables
 with app.app_context():
-    inspector = inspect(db.engine)
-    db_name = app.config.get('DB_NAME')
-    existing_dbs = inspector.get_table_names()
-    print(existing_dbs)
-    # existing_dbs = db.session.execute(text("SHOW DATABASES;"))
-    if db_name not in existing_dbs:
-        print(f"Creating database {db_name}")
-        # db.session.execute(text(f"CREATE DATABASE {db_name}"))
     db.create_all()
 
+# Add basic authentication tokens
+tokens = {
+    app.config.get("USER_TOKEN"): "user_account",
+    app.config.get("ADMIN_TOKEN"): "admin_account",
+}
+
+roles = {
+    "user_account": "user",
+    "admin_account": "admin"
+}
+
+@auth.verify_token
+def verify_token(token):
+    if token in tokens:
+        return tokens[token]
+
+@auth.get_user_roles
+def get_user_roles(username):
+    return roles.get(username)
 
 # Task Resource
 class TaskResource(Resource):
@@ -91,6 +117,11 @@ class TaskResource(Resource):
         """Get all Tasks in the database.
 
         ---
+        info:
+          version: 1.0.0
+          title: Flask Task API
+          description: >
+            An API for handling tasks
         tags:
           - tasks
         definitions:
@@ -110,17 +141,27 @@ class TaskResource(Resource):
             description: A list of all tasks in the database
             schema:
                 $ref: '#/definitions/TaskList' 
+          '5XX':
+            description: Unexpected error.
 
         """
         return jsonify({"tasks": [task.to_dict() for task in db.session.query(Task).all()]})
 
+    @auth.login_required(role='user')
     def post(self):
         """Create a new Task in the database.
 
         ---
         tags:
           - tasks
+        security:
+          - Bearer
         parameters:
+          - name: Authorization
+            in: header
+            type: string
+            required: true
+            description: Add "Bearer " in front of token
           - name: task_id
             in: path
             type: integer
@@ -134,8 +175,14 @@ class TaskResource(Resource):
             description: A new Task has been created
             schema:
                 $ref: '#/definitions/Task' 
-        400:
+          400:
             description: Bad request, title and description must be filled
+          401:
+              description: Unauthorized
+          403:
+              description: Forbidden
+          '5XX':
+            description: Unexpected error.
         """
         try:
             d = {}
@@ -182,6 +229,8 @@ class TaskDetailResource(Resource):
                 $ref: '#/definitions/Task' 
           404:
             description: Task with specified ID was not found
+          '5XX':
+            description: Unexpected error.
         """
         task = db.session.get(Task, task_id)
 
@@ -190,13 +239,21 @@ class TaskDetailResource(Resource):
 
         return make_response(jsonify({"error": "Task not found"}), 404)
 
+    @auth.login_required(role='user')
     def put(self, task_id: int):
         """Update a single Task in the database.
 
         ---
         tags:
           - tasks
+        security:
+          - Bearer
         parameters:
+          - name: Authorization
+            in: header
+            type: string
+            required: true
+            description: Add "Bearer " in front of token
           - name: task_id
             in: path
             type: integer
@@ -210,10 +267,16 @@ class TaskDetailResource(Resource):
             description: A single Task
             schema:
                 $ref: '#/definitions/Task' 
-        400:
-            description: Bad request, title and description must be filled
-        404:
-            description: Task with specified ID was not found
+          400:
+              description: Bad request, title and description must be filled
+          401:
+              description: Unauthorized
+          403:
+              description: Forbidden
+          404:
+              description: Task with specified ID was not found
+          '5XX':
+            description: Unexpected error.
         """
         task = db.session.get(Task, task_id)
 
@@ -232,13 +295,21 @@ class TaskDetailResource(Resource):
 
         return make_response(jsonify({"error": "Task not found"}), 404)
 
+    @auth.login_required(role='admin')
     def delete(self, task_id: int):
         """Update an existing Task in the database.
 
         ---
         tags:
           - tasks
+        security:
+          - Bearer
         parameters:
+          - name: Authorization
+            in: header
+            type: string
+            required: true
+            description: Add "Bearer " in front of token
           - name: task_id
             in: path
             type: integer
@@ -246,8 +317,14 @@ class TaskDetailResource(Resource):
         responses:
           204:
             description: Task deleted
+          401:
+            description: Unauthenticated. Use the Bearer token
+          403:
+            description: Unauthorized. Use a token with admin access
           404:
             description: Task with specified ID was not found
+          '5XX':
+            description: Unexpected error.
         """
         task = db.session.get(Task, task_id)
 
