@@ -8,14 +8,14 @@ authors = ["Vito Minheere <vitominheere@gmail.com>"]
 python = "^3.11"
 psycopg2 = "^2.9.7"
 flask = "^3.0.0"
-pydantic = "^2.5.2"
 flask-sqlalchemy = "^3.1.1"
 flask-migrate = "^4.0.5"
 ruff = "^0.1.7"
 flask-restful = "^0.3.10"
+flasgger = "^0.9.7.1"
 
-[tool.poetry.group.dev.dependencies]
-black = "^23.1.0"
+[tool.ruff.lint]
+select = ["D"]
 
 [build-system]
 requires = ["poetry-core"]
