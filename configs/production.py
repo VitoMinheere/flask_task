@@ -7,6 +7,8 @@ import os
 TABLE_NAME = 'task'
 SCHEMA_NAME = 'flask_task'
 DB_NAME = os.environ.get('DBNAME', None)
+USER_TOKEN = os.environ.get('USER_TOKEN')
+ADMIN_TOKEN = os.environ.get('ADMIN_TOKEN')
 
 DATABASE_URI = 'postgresql+psycopg2://{dbuser}:{dbpass}@{dbhost}/{dbname}'.format(
     dbuser=os.environ.get('DBUSER', None),
