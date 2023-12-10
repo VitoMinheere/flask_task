@@ -24,8 +24,7 @@ if app.testing:
 elif 'WEBSITE_HOSTNAME' not in os.environ:
     print("Loading config.development and environment variables from .env file.")
     # local
-    app.config.from_object('configs.testing')
-    # app.config.from_object('configs.development')
+    app.config.from_object('configs.development')
 else:
     # production
     print("Loading config.production.")
@@ -51,7 +50,7 @@ class Task(db.Model):
     # Let DB handle setting the correct timestamp
     created_at = db.Column(db.DateTime(), server_default=func.now())
 
-    # __table_args__ = {'schema': app.config.get('SCHEMA_NAME')}
+    __table_args__ = {'schema': app.config.get('SCHEMA_NAME')}
     
 
     def __repr__(self):
@@ -102,8 +101,8 @@ class TaskResource(Resource):
           Task:
             type: object
             properties:
-              id:
-                type: integer
+              title:
+                type: string
               description:
                 type: string
         responses:
@@ -126,6 +125,10 @@ class TaskResource(Resource):
             in: path
             type: integer
             required: true
+          - name: task
+            in: body
+            schema: 
+                $ref: '#/definitions/Task' 
         responses:
           201:
             description: A new Task has been created
@@ -198,12 +201,18 @@ class TaskDetailResource(Resource):
             in: path
             type: integer
             required: true
+          - name: task
+            in: body
+            schema: 
+                $ref: '#/definitions/Task' 
         responses:
           200:
             description: A single Task
             schema:
                 $ref: '#/definitions/Task' 
-          404:
+        400:
+            description: Bad request, title and description must be filled
+        404:
             description: Task with specified ID was not found
         """
         task = db.session.get(Task, task_id)
