@@ -8,7 +8,7 @@ from flask import request, jsonify, make_response
 from flask_restful import Resource, reqparse
 from flasgger import Swagger, swag_from
 
-from sqlalchemy import text
+from sqlalchemy import text, inspect
 from sqlalchemy.sql import func
 from sqlalchemy.orm import Session
 
@@ -17,20 +17,24 @@ swagger = Swagger(app)
 api = Api(app)
 
 # WEBSITE_HOSTNAME exists only in production environment
-if 'WEBSITE_HOSTNAME' not in os.environ:
-    # local development, where we'll use environment variables
+if app.testing:
+    print("Loading config.testing and running tests")
+    # local
+    app.config.from_object('configs.testing')
+elif 'WEBSITE_HOSTNAME' not in os.environ:
     print("Loading config.development and environment variables from .env file.")
-    app.config.from_object('azureproject.development')
+    # local
+    app.config.from_object('configs.testing')
+    # app.config.from_object('configs.development')
 else:
     # production
     print("Loading config.production.")
-    app.config.from_object('azureproject.production')
+    app.config.from_object('configs.production')
 
 app.config.update(
     SQLALCHEMY_DATABASE_URI=app.config.get('DATABASE_URI'),
     SQLALCHEMY_TRACK_MODIFICATIONS=False,
 )
-
 db = SQLAlchemy(app)
 
 # Create the Model
@@ -40,14 +44,14 @@ class Task(db.Model):
     Can only be deleted upon completion
     """
 
-    __table_name__ = "task"
+    __table_name__ = app.config.get("TABLE_NAME")
     id = db.Column(db.Integer(), primary_key=True, autoincrement=True)
     title = db.Column(db.String(80), nullable=False)
-    description = db.Column(db.String(1000), nullable=False)
+    description = db.Column(db.String(255), nullable=False)
     # Let DB handle setting the correct timestamp
     created_at = db.Column(db.DateTime(), server_default=func.now())
 
-    __table_args__ = {'schema': 'flask_task'}
+    # __table_args__ = {'schema': app.config.get('SCHEMA_NAME')}
     
 
     def __repr__(self):
@@ -56,12 +60,21 @@ class Task(db.Model):
     def to_dict(self):
         """Return relevant fields as a dictionary."""
         return {
+            "id": self.id,
             "title": self.title,
             "description": self.description
         }
 
-# Initialize the database connection
+# Initialize the database connection and create the DB and tables
 with app.app_context():
+    inspector = inspect(db.engine)
+    db_name = app.config.get('DB_NAME')
+    existing_dbs = inspector.get_table_names()
+    print(existing_dbs)
+    # existing_dbs = db.session.execute(text("SHOW DATABASES;"))
+    if db_name not in existing_dbs:
+        print(f"Creating database {db_name}")
+        # db.session.execute(text(f"CREATE DATABASE {db_name}"))
     db.create_all()
 
 
@@ -100,7 +113,7 @@ class TaskResource(Resource):
                 $ref: '#/definitions/TaskList' 
 
         """
-        return jsonify({"tasks": [task.to_dict() for task in Task.query.all()]})
+        return jsonify({"tasks": [task.to_dict() for task in db.session.query(Task).all()]})
 
     def post(self):
         """Create a new Task in the database.
@@ -167,7 +180,7 @@ class TaskDetailResource(Resource):
           404:
             description: Task with specified ID was not found
         """
-        task = Task.query.get(task_id)
+        task = db.session.get(Task, task_id)
 
         if task:
             return jsonify({"task": task.to_dict()})
@@ -193,20 +206,19 @@ class TaskDetailResource(Resource):
           404:
             description: Task with specified ID was not found
         """
-        task = Task.query.get(task_id)
+        task = db.session.get(Task, task_id)
 
         if task:
             try:
-                data = {}
                 args = self.reqparse.parse_args()
                 for k, v in args.items():
                     if v != None:
-                        data[k] = v
+                        setattr(task, k, v)
             except TypeError as e:
-                return make_response(jsonify({"error": e.errors()}), 400)
+                print(e)
+                return make_response(jsonify({"error": str(e)}), 400)
             else:
-                task.update(data)
-                db.session.put(task)
+                db.session.commit
                 return jsonify({"task": task.to_dict()})
 
         return make_response(jsonify({"error": "Task not found"}), 404)
@@ -228,12 +240,14 @@ class TaskDetailResource(Resource):
           404:
             description: Task with specified ID was not found
         """
-        task = Task.query.filter(id=task_id).first()
+        task = db.session.get(Task, task_id)
 
         if not task:
             return make_response(jsonify({"error": "Task not found"}), 404)
 
-        tasks = [t for t in tasks if t["id"] != task_id]
+        db.session.delete(task)
+        db.session.commit()
+
         return make_response(jsonify({"message": "Task deleted successfully"}))
 
 VERSION = "v1.0"

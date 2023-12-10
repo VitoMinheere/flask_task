@@ -1,12 +1,25 @@
 import unittest
+import os
+
 from flask import json
-from flask_tasks.app import app, BASE_URL
+from flask_tasks.app import app, db, BASE_URL
+
+TEST_DB_NAME = "flask_task"
 
 class TestTaskEndpoints(unittest.TestCase):
 
+
     def setUp(self):
+        os.environ["TESTING"] = "1"
         app.config['TESTING'] = True
         self.app = app.test_client()
+
+    def create_task(self) -> int:
+        task_data = {'title': 'Test Task', 'description': 'This is a test task'}
+        response = self.app.post(f'{BASE_URL}/tasks', json=task_data)
+        data = json.loads(response.get_data(as_text=True))
+        task_id = data["task"]["id"]
+        return task_id
 
     def test_create_task(self):
         task_data = {'title': 'Test Task', 'description': 'This is a test task'}
@@ -46,10 +59,11 @@ class TestTaskEndpoints(unittest.TestCase):
         self.assertIn('error', data)
 
     def test_update_task(self):
-        task_id = 1  # Assuming there's at least one task in the list
+        task_id = self.create_task()
         updated_data = {'title': 'Updated Task Title', 'description': 'Updated task description'}
         response = self.app.put(f'{BASE_URL}/tasks/{task_id}', json=updated_data)
         data = json.loads(response.get_data(as_text=True))
+
         self.assertEqual(response.status_code, 200)
         self.assertIn('task', data)
         self.assertEqual(data['task']['id'], task_id)
@@ -64,10 +78,7 @@ class TestTaskEndpoints(unittest.TestCase):
         self.assertIn('error', data)
 
     def test_delete_task(self):
-        task_data = {'title': 'Test Task', 'description': 'This is a test task'}
-        response = self.app.post(f'{BASE_URL}/tasks', json=task_data)
-        data = json.loads(response.get_data(as_text=True))
-        task_id = data["task"]["id"]
+        task_id = self.create_task()
 
         response = self.app.delete(f'{BASE_URL}/tasks/{task_id}')
         data = json.loads(response.get_data(as_text=True))
