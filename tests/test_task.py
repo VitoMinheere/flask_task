@@ -2,7 +2,7 @@ import unittest
 import os
 
 from flask import json
-from flask_tasks.app import app, db, BASE_URL
+from app import app, db, BASE_URL
 
 class TestTaskEndpoints(unittest.TestCase):
 
