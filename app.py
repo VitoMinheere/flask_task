@@ -9,7 +9,9 @@ from flask import request, jsonify, make_response
 from flask_restful import Resource, reqparse
 from flasgger import Swagger, swag_from
 from flask_httpauth import HTTPTokenAuth
+from dotenv import load_dotenv
 
+from sqlalchemy import text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import Session
 
@@ -41,10 +43,11 @@ if app.testing:
 elif 'WEBSITE_HOSTNAME' not in os.environ:
     print("Loading config.development and environment variables from .env file.")
     # local
-    app.config.from_object('configs.testing')
+    app.config.from_object('configs.development')
 else:
     # production
     print("Loading config.production.")
+    load_dotenv(".env")
     app.config.from_object('configs.production')
 
 app.config.update(
@@ -81,6 +84,7 @@ class Task(db.Model):
 
 # Initialize the database connection and create the DB and tables
 with app.app_context():
+    # db.init_app(app)
     db.create_all()
 
 # Add basic authentication tokens
@@ -89,18 +93,24 @@ tokens = {
     app.config.get("ADMIN_TOKEN"): "admin_account",
 }
 
+# Add roles matching the above account names
 roles = {
     "user_account": "user",
     "admin_account": "admin"
 }
 
 @auth.verify_token
-def verify_token(token):
+def verify_token(token: str) -> str:
+    """Verify that a token send in the header exists.
+    """
     if token in tokens:
         return tokens[token]
 
 @auth.get_user_roles
-def get_user_roles(username):
+def get_user_roles(username: str) -> str:
+    """Get the role matching a username.
+    Will return None if none matches
+    """
     return roles.get(username)
 
 # Task Resource
@@ -108,6 +118,7 @@ class TaskResource(Resource):
     """Endpoint for getting and creating tasks."""
 
     def __init__(self):
+        """Parser for the arguments in the endpoints."""
         self.reqparse = reqparse.RequestParser()
         self.reqparse.add_argument('title', type = str, required = True, help = 'No task title provided')
         self.reqparse.add_argument('description', type = str, required=True, location = 'json')
@@ -117,11 +128,6 @@ class TaskResource(Resource):
         """Get all Tasks in the database.
 
         ---
-        info:
-          version: 1.0.0
-          title: Flask Task API
-          description: >
-            An API for handling tasks
         tags:
           - tasks
         definitions:
@@ -150,6 +156,7 @@ class TaskResource(Resource):
     @auth.login_required(role='user')
     def post(self):
         """Create a new Task in the database.
+        Requires User level access
 
         ---
         tags:
@@ -162,10 +169,6 @@ class TaskResource(Resource):
             type: string
             required: true
             description: Add "Bearer " in front of token
-          - name: task_id
-            in: path
-            type: integer
-            required: true
           - name: task
             in: body
             schema: 
@@ -205,6 +208,7 @@ class TaskDetailResource(Resource):
     """Endpoint for getting, updating and deleting a single task."""
 
     def __init__(self):
+        """Parser for the arguments in the endpoints."""
         self.reqparse = reqparse.RequestParser()
         self.reqparse.add_argument('title', type = str, location = 'json')
         self.reqparse.add_argument('description', type = str, location = 'json')
@@ -242,6 +246,7 @@ class TaskDetailResource(Resource):
     @auth.login_required(role='user')
     def put(self, task_id: int):
         """Update a single Task in the database.
+        Requires User level access
 
         ---
         tags:
@@ -298,6 +303,7 @@ class TaskDetailResource(Resource):
     @auth.login_required(role='admin')
     def delete(self, task_id: int):
         """Update an existing Task in the database.
+        Requires Admin level access
 
         ---
         tags:
@@ -344,4 +350,4 @@ api.add_resource(TaskResource, f"{BASE_URL}/tasks")
 api.add_resource(TaskDetailResource, f"{BASE_URL}/tasks/<int:task_id>")
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run()

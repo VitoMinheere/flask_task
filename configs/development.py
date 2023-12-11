@@ -4,9 +4,9 @@ This can be in a decvontainer or cloud environment. env vars will default if the
 """
 import os
 
-TABLE_NAME = 'task'
+TABLE_NAME = 'tasks'
 SCHEMA_NAME = 'flask_task'
-DB_NAME = os.environ.get('DBNAME', "flask_task")
+DB_NAME = "tasks"
 USER_TOKEN = "user_token"
 ADMIN_TOKEN = "admin_token"
 
