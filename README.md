@@ -3,7 +3,7 @@ Task REST API in Flask, deployable on Azure
 
 A basic REST API endpoint with authentication and authorization
 
-Hosted on [Azure](https://flask-tasks-twvmz7gf2c5ce-app-service.azurewebsites.net/apidocs/]
+Hosted on [Azure](https://flask-tasks-twvmz7gf2c5ce-app-service.azurewebsites.net/apidocs/)
 # Dev environment
 ## Prerequisit
 In order to use the provided dev containter, ensure that you have installed the official "dev containers" extention for VSCode. You can find it by searching for "dev containers" in the extension marketplace in VSCode. It's the one by Microsoft. 
